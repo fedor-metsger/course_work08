@@ -5,6 +5,6 @@
 
 `docker-compose build`
 
-### 2. Для запуска - команду:
+### 2. Для запуска проекта - команду:
 
 `docker-compose up`
