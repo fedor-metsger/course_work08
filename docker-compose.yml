@@ -1,0 +1,71 @@
+version: '3.9'
+
+volumes:
+  v_data:
+  v_cache:
+    driver: local
+
+services:
+  db:
+    image: postgres:alpine
+    restart: always
+    environment:
+      POSTGRES_DB: dl_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      PGDATA: /data
+    volumes:
+      - v_data:/data
+
+  redis:
+    image: redis:7-alpine
+    restart: always
+    command: redis-server --save 20 1 --loglevel warning
+    volumes: 
+      - v_cache:/data
+
+  worker:
+    build: .
+    restart: always
+    command: /usr/local/bin/celery -A config worker -l INFO
+    environment:
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
+    depends_on:
+      - redis
+
+  beat:
+    build: .
+    restart: always
+    command: /usr/local/bin/celery -A config beat -l INFO
+    environment:
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
+    depends_on:
+      - redis
+
+  web:
+    build: .
+    restart: always
+    command:
+      - /bin/bash
+      - -c
+      - |
+        ./manage.py migrate
+        ./manage.py runserver 0.0.0.0:80
+    environment:
+      POSTGRES_HOST: db
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: dl_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      ALLOWED_HOSTS: 127.0.0.1
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
+    ports:
+      - '80:80'
+    depends_on:
+      - db
+      - redis
+      - worker
+      - beat
